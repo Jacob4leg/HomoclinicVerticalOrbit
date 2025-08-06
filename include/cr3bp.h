@@ -4,17 +4,14 @@
 #ifndef _CR3BP_H_
 #define _CR3BP_H_
 
-using namespace std;
-using namespace capd;
-using autodiff::Node;
-
-// #########################################################################
 /**
  This routine implements vector field of the CR3BP.
 The routine is written in the format required by the constructor
 of the class DMap and IMap from the CAPD library.
 */
-void cr3bpVectorField(Node t, Node in[], int dimIn, Node out[], int dimOut, Node params[], int noParams){
+void cr3bpVectorField(capd::autodiff::Node t, capd::autodiff::Node in[], int dimIn, capd::autodiff::Node out[], int dimOut, capd::autodiff::Node params[], int noParams){
+    typedef capd::autodiff::Node Node;
+
     Node xMu = in[0] + params[0]; // params[0] - relative mass of the first body
     Node xMj = in[0] + params[1]; // params[1] = params[0] - 1
     Node xMuSquare = xMu^2;       // square
@@ -36,7 +33,13 @@ void cr3bpVectorField(Node t, Node in[], int dimIn, Node out[], int dimOut, Node
     out[5] = in[2]*factor;
 }
 
-void energy(Node t, Node in[], int dimIn, Node out[], int dimOut, Node params[], int noParams){
+
+/*
+Implements energy constant as a map
+*/
+void energy(capd::autodiff::Node t, capd::autodiff::Node in[], int dimIn, capd::autodiff::Node out[], int dimOut, capd::autodiff::Node params[], int noParams){
+    typedef capd::autodiff::Node Node;
+    
     Node xMu = params[0]; // params[0] - relative mass of the first body
     Node xMj = params[1]; // params[1] = params[0] - 1
 
@@ -99,7 +102,7 @@ struct CR3BP {
             
             // input variables are x,dy (0 and 4)
             TMatrix M({{D[1][0],D[1][4]},{D[3][0],D[3][4]}});
-            u = matrixAlgorithms::gauss(M,u);
+            u = capd::matrixAlgorithms::gauss(M,u);
             v[0] -= u[0];
             v[4] -= u[1];
         }
@@ -129,17 +132,19 @@ struct ICR3BP {
 
     long double muSJ = 0.00095388114032796904;
 
-    IMap vf;
-    IC2OdeSolver solver;
-    ICoordinateSection section_y;
-    ICoordinateSection section_x;
-    ICoordinateSection section_z;
-    IC2PoincareMap pm_x;
-    IC2PoincareMap pm_z;
-    IC2PoincareMap pm_y;
+    capd::IMap vf;
+    capd::IMap E;
+    capd::IC2OdeSolver solver;
+    capd::ICoordinateSection section_y;
+    capd::ICoordinateSection section_x;
+    capd::ICoordinateSection section_z;
+    capd::IC2PoincareMap pm_x;
+    capd::IC2PoincareMap pm_z;
+    capd::IC2PoincareMap pm_y;
 
     ICR3BP() : 
         vf(cr3bpVectorField,6,6,2),
+        E(energy,6,1,2),
         solver(vf,20),
         section_x(6,0),
         section_y(6,1),
@@ -150,6 +155,9 @@ struct ICR3BP {
     {
         vf.setParameter(0,muSJ);
         vf.setParameter(1,muSJ-1.);
+
+        E.setParameter(0,muSJ);
+        E.setParameter(1,muSJ-1.);
     }    
 };
 
