@@ -5,7 +5,43 @@
 #ifndef _LINALG_HELPER_H_
 #define _LINALG_HELPER_H_
 
-capd::LDMatrix energy_change_of_basis(capd::LDVector p, capd::LDMap &E) {
+inline capd::LDMatrix matrix_erase_cord(capd::LDMatrix M, int k) {
+    auto dim = M.dimension();
+    int n = std::get<0>(dim);
+    assert(n == std::get<1>(dim));
+
+    capd::LDMatrix M_res(n-1,n-1);
+
+    for(int i = 0; i < n-1; i++) {
+        int l = i < k ? i : i+1;
+        for(int j = 0; j < n-1; j++) {
+            int m = j < k ? j : j+1;
+            M_res[i][j] = M[l][m];
+        }
+    }
+    return M_res;
+}
+
+inline capd::LDMatrix matrix_add_cord(capd::LDMatrix M, int k) {
+    auto dim = M.dimension();
+    int n = std::get<0>(dim);
+    assert(n == std::get<1>(dim));
+
+    capd::LDMatrix M_res(n+1,n+1);
+
+    for(int i = 0; i < n+1; i++) {
+        if(i == k) continue;
+        int l = i < k ? i : i-1;
+        for(int j = 0; j < n+1; j++) {
+            if(j == k) continue;
+            int m = j < k ? j : j-1;
+            M_res[i][j] = M[l][m];
+        }
+    }
+    return M_res;
+}
+
+inline capd::LDMatrix energy_change_of_basis(capd::LDVector p, capd::LDMap &E) {
 
     capd::LDMatrix DE = E.derivative(p);
     capd::LDVector E_grad{DE[0][0],DE[0][1], DE[0][3], DE[0][4], DE[0][5],-1};
@@ -20,7 +56,7 @@ capd::LDMatrix energy_change_of_basis(capd::LDVector p, capd::LDMap &E) {
     return T;
 }
 
-capd::LDMatrix us_change_of_basis(capd::LDMatrix A) {
+inline capd::LDMatrix us_change_of_basis(capd::LDMatrix A) {
     std::pair<int,int> dim = A.dimension();
     int n = std::get<0>(dim);
     int m = std::get<1>(dim);

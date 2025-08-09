@@ -9,7 +9,7 @@
 The routine is written in the format required by the constructor
 of the class DMap and IMap from the CAPD library.
 */
-void cr3bpVectorField(capd::autodiff::Node t, capd::autodiff::Node in[], int dimIn, capd::autodiff::Node out[], int dimOut, capd::autodiff::Node params[], int noParams){
+inline void cr3bpVectorField(capd::autodiff::Node t, capd::autodiff::Node in[], int dimIn, capd::autodiff::Node out[], int dimOut, capd::autodiff::Node params[], int noParams){
     typedef capd::autodiff::Node Node;
 
     Node xMu = in[0] + params[0]; // params[0] - relative mass of the first body
@@ -37,7 +37,7 @@ void cr3bpVectorField(capd::autodiff::Node t, capd::autodiff::Node in[], int dim
 /*
 Implements energy constant as a map
 */
-void energy(capd::autodiff::Node t, capd::autodiff::Node in[], int dimIn, capd::autodiff::Node out[], int dimOut, capd::autodiff::Node params[], int noParams){
+inline void energy(capd::autodiff::Node t, capd::autodiff::Node in[], int dimIn, capd::autodiff::Node out[], int dimOut, capd::autodiff::Node params[], int noParams){
     typedef capd::autodiff::Node Node;
     
     Node xMu = params[0]; // params[0] - relative mass of the first body
