@@ -1,7 +1,8 @@
 #include<iostream>
+#include<future>
+#include<numeric>
+#include<thread>
 #include "capd/capdlib.h"
-// #include "cr3bp.h"
-// #include "linalg_helper.h"
 #include "prove_fixed_point.h"
 
 using namespace std;
@@ -9,12 +10,26 @@ using namespace capd;
 
 int main() {
     
-    cout.precision(10);
+    cout.precision(15);
 
-    long double eps = 1e-6;
-    long double E_eps = 1e-10;
+    // long double eps = 1e-6;
+    // long double E_eps = 1e-8;
+
+    // long double eps_x = 5e-10;
+    // long double eps_y = 1e-8;
+    // test();
+    // return 0;
+
+    long double eps_x = 1e-7;
+    // long double eps_y = 2e-9;
+    long double eps_y = 1.2e-8;
+    // long double E_eps = 1e-12;
+    long double E_eps = 1e-12;
     Interval E(-E_eps,E_eps);
-    prove_fixed_point(eps,E);
+    // cout << prove_fixed_point(eps_x,eps_y,E_eps) << endl;
+    // cone_coeff(eps_x,eps_y,E_eps);
+
+    test(E);
 
     // LDVector v0{0.9468923401720671061132517L,
                     // -4.072102120831082499146823e-24L,

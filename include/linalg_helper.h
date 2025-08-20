@@ -5,12 +5,14 @@
 #ifndef _LINALG_HELPER_H_
 #define _LINALG_HELPER_H_
 
-inline capd::LDMatrix matrix_erase_cord(capd::LDMatrix M, int k) {
+
+template<typename T>
+inline capd::vectalg::Matrix<T,0,0> matrix_erase_cord(capd::vectalg::Matrix<T,0,0> M, int k) {
     auto dim = M.dimension();
     int n = std::get<0>(dim);
     assert(n == std::get<1>(dim));
 
-    capd::LDMatrix M_res(n-1,n-1);
+    capd::vectalg::Matrix<T,0,0> M_res(n-1,n-1);
 
     for(int i = 0; i < n-1; i++) {
         int l = i < k ? i : i+1;
@@ -22,12 +24,13 @@ inline capd::LDMatrix matrix_erase_cord(capd::LDMatrix M, int k) {
     return M_res;
 }
 
-inline capd::LDMatrix matrix_add_cord(capd::LDMatrix M, int k) {
+template<typename T>
+inline capd::vectalg::Matrix<T,0,0> matrix_add_cord(capd::vectalg::Matrix<T,0,0> M, int k) {
     auto dim = M.dimension();
     int n = std::get<0>(dim);
     assert(n == std::get<1>(dim));
 
-    capd::LDMatrix M_res(n+1,n+1);
+    capd::vectalg::Matrix<T,0,0> M_res(n+1,n+1);
 
     for(int i = 0; i < n+1; i++) {
         if(i == k) continue;

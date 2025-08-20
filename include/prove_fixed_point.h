@@ -6,7 +6,8 @@
 #ifndef _PROVE_FIXED_POINT_H_
 #define _PROVE_FIXED_POINT_H_
 
-bool prove_fixed_point(long double eps, capd::Interval E);
-
+bool prove_fixed_point(long double eps_x, long double eps_y, long double E_eps);
+capd::Interval cone_coeff(long double eps_x, long double eps_y, long double E_eps);
+void test(capd::Interval E);
 
 #endif

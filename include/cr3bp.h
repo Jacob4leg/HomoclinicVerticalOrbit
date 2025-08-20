@@ -158,6 +158,9 @@ struct ICR3BP {
 
         E.setParameter(0,muSJ);
         E.setParameter(1,muSJ-1.);
+
+        solver.setAbsoluteTolerance(1e-15);
+        solver.setRelativeTolerance(1e-15);
     }    
 };
 
