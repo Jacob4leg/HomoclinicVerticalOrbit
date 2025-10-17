@@ -20,16 +20,17 @@ int main() {
     // test();
     // return 0;
 
-    long double eps_x = 1e-7;
+    long double eps_x = 15e-8;
     // long double eps_y = 2e-9;
     long double eps_y = 1.2e-8;
     // long double E_eps = 1e-12;
-    long double E_eps = 1e-12;
-    Interval E(-E_eps,E_eps);
+    long double E_eps = 1e-8;
+    // E_eps = 0.;
+    Interval E(-E_eps,1e-9);
     // cout << prove_fixed_point(eps_x,eps_y,E_eps) << endl;
     // cone_coeff(eps_x,eps_y,E_eps);
-
-    test(E);
+    eval_rectangle(eps_x,eps_y, E);
+    // test(E);
 
     // LDVector v0{0.9468923401720671061132517L,
                     // -4.072102120831082499146823e-24L,

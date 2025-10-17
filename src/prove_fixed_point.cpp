@@ -80,7 +80,7 @@ bool prove_fixed_point(long double eps_x, long double eps_y, long double E_eps) 
     return subset(N,X);
 }
 
-Interval cone_coeff(long double eps_x, long double eps_y, long double E_eps) {
+Interval cone_coeff(long double eps_x, long double eps_y, Interval E) {
     LDMatrix T = get_change_of_basis();
     
     IMatrix T_total(T_E * T);
@@ -88,14 +88,14 @@ Interval cone_coeff(long double eps_x, long double eps_y, long double E_eps) {
 
     Interval eps_interval_x(0,eps_x);
     Interval eps_interval_y(-eps_y,eps_y);
-    Interval E(-E_eps,E_eps);
+    // Interval E(-E_eps,E_eps);
 
-    int division_E = 10;
-    int division_x = 1000;
+    int division_E = 1;
+    int division_x = 10;
 
-    long double E_delta = 2 * E_eps / division_E;
-    long double E_begin = -E_eps;
-    long double E_end = -E_eps + E_delta;
+    long double E_delta = (E.rightBound() - E.leftBound()) / division_E;
+    long double E_begin = E.leftBound();
+    long double E_end = E.leftBound() + E_delta;
     Interval E_i(E_begin,E_end);
 
     IMatrix D_total(5,5);
@@ -118,7 +118,7 @@ Interval cone_coeff(long double eps_x, long double eps_y, long double E_eps) {
             X_j += x_delta;
         }
         // if(i % 50 == 0) cout << i << endl;
-        cout << i << endl;
+        // cout << i << endl;
 
         E_i += E_delta;
     }
@@ -131,33 +131,24 @@ Interval cone_coeff(long double eps_x, long double eps_y, long double E_eps) {
     //             eps_interval_y, E};
 
     
-    // C1HORect2Set S(C1Rect2Set::C0BaseSet(IVector(v0),T_total,u), C1Rect2Set::C1BaseSet(T_total));
-
     IMaxNorm max_norm;
     ISumNorm sum_norm;
 
-    // IMatrix D(6,6);
-    // IVector y = Ivf.pm_y(S,D,2);
-    // D = Ivf.pm_y.computeDP(y,D);
-    // D = T_total_inv * D;
-    
-    // IMatrix D_reduced = matrix_erase_cord(D,1);
-
     Interval A = abs(D_total[0][0]).left();
-    Interval B = max_norm(IVector{D_total[0][1],D_total[0][2],D_total[0][3]}).right();
-    Interval C = sum_norm(IVector{D_total[1][0],D_total[2][0],D_total[3][0]}).right();
+    Interval B = sum_norm(IVector{D_total[0][1],D_total[0][2],D_total[0][3]}).right();
+    Interval C = max_norm(IVector{D_total[1][0],D_total[2][0],D_total[3][0]}).right();
 
     IMatrix H1 = matrix_erase_cord(D_total,4);
-    Interval H = sum_norm(matrix_erase_cord(H1,0)).right();
+    Interval H = max_norm(matrix_erase_cord(H1,0)).right();
 
     Interval delta = power(-A + H,2) - 4 * B * C;
     Interval alpha_1 = ( A - H + sqrt(delta) ) / (2 * B);
     Interval alpha_2 = ( A - H - sqrt(delta) ) / (2 * B);
 
-    cout << alpha_1 << endl;
-    cout << alpha_2 << endl;
+    // cout << alpha_1 << endl;
+    // cout << alpha_2 << endl;
     
-    return 1;
+    return alpha_2.right();
 }
 
 
@@ -169,8 +160,269 @@ IVector quick_eval(IVector W, IMatrix T) {
     return IVector{W2[3],W2[5]};
 }
 
+LDVector quick_eval_non_rig(LDVector w, const LDMatrix &T, const LDMatrix &T_inv) {
+    LDVector u = T * w + v0;
+    LDVector u1 = vf.pm_x(u);
+    LDVector u2 = vf.pm_y(u1);
+    return LDVector{u2[3],u2[5]};
+}
+
+void rectangle() {
+
+
+    LDMatrix O1(6,6), O2(6,6), O(6,6);
+    LDVector v1 = vf.pm_y(v0,O1);
+    LDVector v2 = vf.pm_y(v1,O2);
+
+    O1 = vf.pm_y.computeDP(v1,O1);
+    O2 = vf.pm_y.computeDP(v2,O2);
+
+    O = O2 * O1;
+
+    LDVector rV(6), iV(6);
+    LDMatrix rVec(6,6), iVec(6,6);
+    computeEigenvaluesAndEigenvectors(O, rV, iV, rVec, iVec);
+    LDVector v_eig = rVec.column(0);
+
+    LDVector w0{0.9468923401720671061132517L,-4.072102120831082499146823e-24L,0.05316795353478707980175375L,
+        -5.553112274845604899656097e-08L,-0.01115319054270743243833971L,-9.199674025000000205149813e-08L};
+    
+    
+    LDMatrix T = get_change_of_basis();
+    LDMatrix T_total(T_E * T);
+    LDMatrix T_total_inv(matrix_add_cord(matrixAlgorithms::gaussInverseMatrix(matrix_erase_cord(T_E * T,1)),1));
+
+    LDVector w_new = T_total_inv * (w0 - v0);
+
+    // LDMatrix D1(6,6), D2(6,6), D(6,6);
+    // LDVector u = T_total * w_new + v0;
+    // LDVector u1 = vf.pm_x(u,D1);
+    // LDVector u2 = vf.pm_y(u1,D2);
+
+    // D1 = vf.pm_x.computeDP(u1,D1);
+    // D2 = vf.pm_y.computeDP(u2,D2);
+
+    // D = D2 * D1;
+
+    // D = D * T_total;
+
+    // LDMatrix D_inv = matrix_add_cord(matrixAlgorithms::gaussInverseMatrix(matrix_erase_cord(D,1)), 1);
+
+    // LDMatrix DD{{D[3][0], D[3][5]}, {D[5][0],D[5][5]}};
+    // LDMatrix DD_inv = matrixAlgorithms::gaussInverseMatrix(DD);
+
+    // cout << matrixAlgorithms::det(DD) << endl;
+
+    // w_new[5] += 1e-8;
+    // cout << w_new << endl;
+    // cout << quick_eval_non_rig(w_new,T_total) << endl;
+    // cout << DD_inv * quick_eval_non_rig(w_new, T_total) << endl;
+    // return;
+
+    long double x0 = w_new[0];
+    long double x_radius = 1e-8;
+    
+    Interval X(x0 - x_radius, x0 + x_radius);
+    Interval E(-1e-5,1e-5);
+
+    int x_div = 1000;
+    int E_div = 1000;
+
+    ofstream file("rectangle_lin.txt");
+
+    long double x_delta = (X.rightBound() - X.leftBound()) / x_div;
+    long double E_delta = (E.rightBound() - E.leftBound()) / E_div;
+    
+    long double x_i = X.leftBound() + x_delta;
+    long double E_i = E.leftBound() + E_delta;
+    
+    long double E_left = E.leftBound();
+    long double E_right = E.rightBound();
+    
+    LDVector w{0,0,0,0,0,E_left};
+    LDVector u_E = T_total * w + v0;
+    u_E = vf.findVerticalLyapunovOrbit(u_E);
+
+    for(int i = 0; i < x_div; i++) {
+        LDVector u1 = vf.pm_x(u_E + x_i * v_eig);
+        LDVector u2 = vf.pm_y(u1);
+        file << x_i << " " << E_left << " " << u2[3] << " " << u2[5] << endl;
+        x_i += x_delta;
+    }
+
+    x_i = X.leftBound() + x_delta;
+    w = LDVector{0,0,0,0,0,E_right};
+    u_E = T_total * w + v0;
+    u_E = vf.findVerticalLyapunovOrbit(u_E);
+
+    for(int i = 0; i < x_div; i++) {
+        LDVector u1 = vf.pm_x(u_E + x_i * v_eig);
+        LDVector u2 = vf.pm_y(u1);
+        file << x_i << " " << E_right << " " << u2[3] << " " << u2[5] << endl;
+        x_i += x_delta;
+    }
+
+    long double x_left = X.leftBound();
+    long double x_right = X.rightBound();
+
+    for(int i = 0; i < E_div; i++) {
+        w = LDVector{0,0,0,0,0,E_i};
+        u_E = T_total * w + v0;
+        u_E = vf.findVerticalLyapunovOrbit(u_E);
+        LDVector u1 = vf.pm_x(u_E + x_left * v_eig);
+        LDVector u2 = vf.pm_y(u1);
+        file << x_left << " " << E_i << " " << u2[3] << " " << u2[5] << endl;
+
+        E_i += E_delta;
+    }
+
+    E_i = E.leftBound() + E_delta;
+
+    for(int i = 0; i < E_div; i++) {
+        w = LDVector{0,0,0,0,0,E_i};
+        u_E = T_total * w + v0;
+        u_E = vf.findVerticalLyapunovOrbit(u_E);
+        LDVector u1 = vf.pm_x(u_E + x_right * v_eig);
+        LDVector u2 = vf.pm_y(u1);
+        file << x_right << " " << E_i << " " << u2[3] << " " << u2[5] << endl;
+
+        E_i += E_delta;
+    }
+
+
+
+    file.close();
+
+    return;
+
+    for(int i = 0; i < x_div; i++) {
+
+        LDVector w1{x_i,0,0,0,0,E.leftBound()};
+        LDVector w2{x_i,0,0,0,0,E.rightBound()};
+        LDVector w3{X.leftBound(),0,0,0,0,E_i};
+        LDVector w4{X.rightBound(),0,0,0,0,E_i};
+
+        // auto res1 = DD_inv * LDVector{w1[0],w1[5]};
+        // auto res2 = DD_inv * LDVector{w2[0],w2[5]};
+        // auto res3 = DD_inv * LDVector{w3[0],w3[5]};
+        // auto res4 = DD_inv * LDVector{w4[0],w4[5]};
+
+        auto res1 = quick_eval_non_rig(w1,T_total,T_total_inv);
+        auto res2 = quick_eval_non_rig(w2,T_total,T_total_inv);
+        auto res3 = quick_eval_non_rig(w3,T_total,T_total_inv);
+        auto res4 = quick_eval_non_rig(w4,T_total,T_total_inv);
+
+        file << x_i << " " << E.leftBound() << " " << res1[0] << " " << res1[1] << endl;
+        file << x_i << " " << E.rightBound() << " " << res2[0] << " " << res2[1] << endl;
+        file << X.leftBound() << " " << E_i << " " << res3[0] << " " << res3[1] << endl;
+        file << X.rightBound() << " " << E_i << " " << res4[0] << " " << res4[1] << endl;
+
+        E_i += E_delta;
+        x_i += x_delta;
+        
+    }
+
+    file.close();
+}
+
+void eval_rectangle(long double x_eps, long double y_eps, Interval E) {
+    rectangle();
+    return;
+
+
+    LDVector w0{0.9468923401720671061132517L,-4.072102120831082499146823e-24L,0.05316795353478707980175375L,
+        -5.553112274845604899656097e-08L,-0.01115319054270743243833971L,-9.199674025000000205149813e-08L};
+    
+    
+    LDMatrix T = get_change_of_basis();
+    IMatrix T_total(T_E * T);
+    LDMatrix T_total_inv(matrix_add_cord(matrixAlgorithms::gaussInverseMatrix(matrix_erase_cord(T_E * T,1)),1));
+
+    LDVector w_new = T_total_inv * (w0 - v0);
+    long double x0 = w_new[0];
+
+    // Interval E_left = E.left();
+    // Interval E_right = E.right();
+    // Interval alpha_1 = cone_coeff(x_eps,y_eps, E_left);
+    // Interval alpha_2 = cone_coeff(x_eps,y_eps,E_right);
+    
+
+    long double x_delta = 2e-8;
+    Interval X(x0 - x_delta, x0 + x_delta);
+    
+    int x_div = 10000;
+    int E_div = 10000;
+
+    // ofstream file("data1.txt");
+    Interval alpha = cone_coeff(x_eps, y_eps, E.left());
+    // cout << alpha << endl;
+
+
+    Interval X_delta(0, (X.rightBound() - X.leftBound()) / x_div );
+    Interval X_i = X.left() + X_delta;
+    Interval E_delta(0, (E.rightBound() - E.leftBound()) / E_div);
+    Interval E_i = E.left() + E_delta;
+
+    for(int i = 0; i < x_div; i++) {
+        
+        Interval Y( -(X_i * alpha).leftBound(), (X_i * alpha).rightBound() );
+        Y = 0;
+
+        IVector W1{X_i,0,Y,Y,Y,E.left()};
+        IVector W2{X_i,0,Y,Y,Y,E.right()};
+        auto res1 = quick_eval(W1,T_total);
+        auto res2 = quick_eval(W2,T_total);
+        
+        // file << res1[0].leftBound() << " " << res1[0].rightBound() << " " << res1[1].leftBound() << " " << res1[1].rightBound() << endl;
+        cout << res2[0].leftBound() << " " << res2[0].rightBound() << " " << res2[1].leftBound() << " " << res2[1].rightBound() << endl;
+        X_i += X_delta.right();
+    }
+    
+    alpha = cone_coeff(x_eps, y_eps, E.left() + 100 * E_delta);
+    for(int i = 0; i < E_div; i++) {
+        // if(i % 100 == 0) {
+        //     alpha = cone_coeff(x_eps, y_eps, E_i + 100 * E_delta);
+        //     cout << alpha << endl;
+        // }
+        
+        Interval Y1( -(X.left() * alpha).leftBound(), (X.left() * alpha).rightBound());
+        Interval Y2( -(X.right() * alpha).leftBound(), (X.right() * alpha).rightBound());
+        
+        Y1 = 0;
+        Y2 = 0;
+
+        IVector W1{X.left(),0,Y1,Y1,Y1,E_i};
+        IVector W2{X.right(),0,Y2,Y2,Y2,E_i};
+        auto res1 = quick_eval(W1,T_total);
+        auto res2 = quick_eval(W2,T_total);
+
+        // file << res1[0].leftBound() << " " << res1[0].rightBound() << " " << res1[1].leftBound() << " " << res1[1].rightBound() << endl;
+        // file << res2[0].leftBound() << " " << res2[0].rightBound() << " " << res2[1].leftBound() << " " << res2[1].rightBound() << endl;
+        E_i += E_delta.right();
+    }
+
+
+    // file.close();
+
+    // Interval Y1 = (x0 - x_delta) * alpha_1; // x_left x E_left
+    // Interval Y2 = (x0 - x_delta) * alpha_2; // x_left x E_right
+    // Interval Y3 = (x0 + x_delta) * alpha_1; // x_right x E_left
+    // Interval Y4 = (x0 + x_delta) * alpha_2; // x_right x E_right
+
+    // IVector W1{x0 - x_delta, 0, Y1, Y1, Y1, E_left};
+    // IVector W2{x0 - x_delta, 0, Y2, Y2, Y2, E_right};
+    // IVector W3{x0 + x_delta, 0, Y3, Y3, Y3, E_left};
+    // IVector W4{x0 + x_delta, 0, Y4, Y4, Y4, E_right};
+
+    // cout << quick_eval(W1,T_total) << endl;
+    // cout << quick_eval(W2,T_total) << endl;
+    // cout << quick_eval(W3,T_total) << endl;
+    // cout << quick_eval(W4,T_total) << endl;
+    
+}
+
 void test(Interval E) {
-    long double alpha = 0.1103049783;
+    long double alpha = 0.1103049783L;
     // long double alpha = 0.;
     
     LDVector w0{0.9468923401720671061132517L,-4.072102120831082499146823e-24L,0.05316795353478707980175375L,
@@ -194,31 +446,26 @@ void test(Interval E) {
     }
 
     LDVector w_new = T_total_inv * (w0 - v0);
-    // cout << w_new << endl;
-    // cout << w_new << endl;
-    
-    // cout << W << endl;
-    // cout << quick_eval(W,T_total) << endl;
-    // IVector W1(W),W2(W),W3(W),W4(W);
     
     double x0 = w_new[0];
     cout << x0 << endl;
-    double x_eps = 1e-8;
+    double x_eps = 5e-8;
     double y_eps = (x0 - x_eps) * alpha; 
-    y_eps = 1e-5;
+    Interval Y(-y_eps,y_eps);
+    // y_eps = 1e-5;
 
-    IVector W{x0,0,0,0,0,E};
-    IVector W1{W[0] - x_eps, 0, 0, 0, 0, E};
-    IVector W2{W[0] + x_eps, 0, 0, 0, 0, E};
-    IVector W3{W[0], -y_eps, -y_eps, -y_eps, -y_eps, E};
-    IVector W4{W[0], y_eps, y_eps, y_eps, y_eps, E};
+    cout << x0 << endl;
+    IVector W{x0,0,0,0,0,0};
+    IVector W1{W[0] - x_eps, 0, Y, Y, Y, E.left()};
+    IVector W2{W[0] + x_eps, 0, Y, Y, Y, E.left()};
+    IVector W3{W[0] - x_eps, 0, Y, Y, Y, E.right()};
+    IVector W4{W[0] + x_eps, 0, Y, Y, Y, E.right()};
 
+    cout << quick_eval(W,T_total) << endl;
     cout << quick_eval(W1,T_total) << endl;
     cout << quick_eval(W2,T_total) << endl;
     cout << quick_eval(W3,T_total) << endl;
     cout << quick_eval(W4,T_total) << endl;
-    
-
 
     // cout << W1 << endl;
     // cout << W2 << endl;
