@@ -223,106 +223,128 @@ void rectangle() {
     long double x_radius = 1e-8;
     
     Interval X(x0 - x_radius, x0 + x_radius);
-    Interval E(-1e-5,1e-5);
+    Interval E(-1e-4,1e-4);
 
-    int x_div = 1000;
-    int E_div = 1000;
+    int x_div = 3000;
+    int E_div = 3000;
 
     ofstream file("rectangle_lin.txt");
 
-    long double x_delta = (X.rightBound() - X.leftBound()) / x_div;
-    long double E_delta = (E.rightBound() - E.leftBound()) / E_div;
+    Interval x_delta(0,(X.rightBound() - X.leftBound()) / x_div);
+    Interval E_delta(0,(E.rightBound() - E.leftBound()) / E_div);
     
-    long double x_i = X.leftBound() + x_delta;
-    long double E_i = E.leftBound() + E_delta;
+    Interval x_i = X.left() + x_delta;
+    Interval E_i = E.left() + E_delta;
     
-    long double E_left = E.leftBound();
-    long double E_right = E.rightBound();
+    Interval E_left = E.left();
+    Interval E_right = E.right();
     
-    LDVector w{0,0,0,0,0,E_left};
-    LDVector u_E = T_total * w + v0;
-    u_E = vf.findVerticalLyapunovOrbit(u_E);
+    LDVector w{0,0,0,0,0,E_left.leftBound()};
+    IVector u_E(vf.findVerticalLyapunovOrbit(T_total * w + v0));
+    
 
     for(int i = 0; i < x_div; i++) {
-        LDVector u1 = vf.pm_x(u_E + x_i * v_eig);
-        LDVector u2 = vf.pm_y(u1);
-        file << x_i << " " << E_left << " " << u2[3] << " " << u2[5] << endl;
-        x_i += x_delta;
+        if(i % 50 == 0) cout << i << endl;
+
+        C0HORect2Set S1(u_E,T_total, IVector{x_i,0,0,0,0,0});
+
+        IVector u1 = Ivf.pm_x(S1);
+
+        C0HORect2Set S2(u1);
+        IVector u2 = Ivf.pm_y(S2);
+
+        file << u2[3].leftBound() << " " << u2[3].rightBound() << " " << u2[5].leftBound() << " " << u2[5].rightBound() << endl;
+        x_i += x_delta.right();
     }
 
-    x_i = X.leftBound() + x_delta;
-    w = LDVector{0,0,0,0,0,E_right};
-    u_E = T_total * w + v0;
-    u_E = vf.findVerticalLyapunovOrbit(u_E);
+    x_i = X.left() + x_delta;
+    w = LDVector{0,0,0,0,0,E_right.leftBound()};
+    u_E = IVector(vf.findVerticalLyapunovOrbit(T_total * w + v0));
 
     for(int i = 0; i < x_div; i++) {
-        LDVector u1 = vf.pm_x(u_E + x_i * v_eig);
-        LDVector u2 = vf.pm_y(u1);
-        file << x_i << " " << E_right << " " << u2[3] << " " << u2[5] << endl;
-        x_i += x_delta;
+        if(i % 50 == 0) cout << i << endl;
+
+        C0HORect2Set S1(u_E,T_total, IVector{x_i,0,0,0,0,0});
+        IVector u1 = Ivf.pm_x(S1);
+
+        C0HORect2Set S2(u1);
+        IVector u2 = Ivf.pm_y(S2);
+
+        file << u2[3].leftBound() << " " << u2[3].rightBound() << " " << u2[5].leftBound() << " " << u2[5].rightBound() << endl;
+        x_i += x_delta.right();
     }
 
-    long double x_left = X.leftBound();
-    long double x_right = X.rightBound();
+    Interval x_left = X.left();
+    Interval x_right = X.right();
 
     for(int i = 0; i < E_div; i++) {
-        w = LDVector{0,0,0,0,0,E_i};
-        u_E = T_total * w + v0;
-        u_E = vf.findVerticalLyapunovOrbit(u_E);
-        LDVector u1 = vf.pm_x(u_E + x_left * v_eig);
-        LDVector u2 = vf.pm_y(u1);
-        file << x_left << " " << E_i << " " << u2[3] << " " << u2[5] << endl;
+        if(i % 50 == 0) cout << i << endl;
 
-        E_i += E_delta;
+        w = LDVector{0,0,0,0,0,E_i.leftBound()};
+        u_E = IVector(vf.findVerticalLyapunovOrbit(T_total * w + v0));
+
+        C0HORect2Set S1(u_E,T_total, IVector{x_left,0,0,0,0,0});
+        IVector u1 = Ivf.pm_x(S1);
+
+        C0HORect2Set S2(u1);
+        IVector u2 = Ivf.pm_y(S2);
+        file << u2[3].leftBound() << " " << u2[3].rightBound() << " " << u2[5].leftBound() << " " << u2[5].rightBound() << endl;
+
+        E_i += E_delta.right();
     }
 
-    E_i = E.leftBound() + E_delta;
+    E_i = E.left() + E_delta;
 
     for(int i = 0; i < E_div; i++) {
-        w = LDVector{0,0,0,0,0,E_i};
-        u_E = T_total * w + v0;
-        u_E = vf.findVerticalLyapunovOrbit(u_E);
-        LDVector u1 = vf.pm_x(u_E + x_right * v_eig);
-        LDVector u2 = vf.pm_y(u1);
-        file << x_right << " " << E_i << " " << u2[3] << " " << u2[5] << endl;
+        if(i % 50 == 0) cout << i << endl;
 
-        E_i += E_delta;
+        w = LDVector{0,0,0,0,0,E_i.leftBound()};
+        u_E = IVector(vf.findVerticalLyapunovOrbit(T_total * w + v0));
+
+        C0HORect2Set S1(u_E,T_total, IVector{x_right,0,0,0,0,0});
+        IVector u1 = Ivf.pm_x(S1);
+
+        C0HORect2Set S2(u1);
+        IVector u2 = Ivf.pm_y(S2);
+        file << u2[3].leftBound() << " " << u2[3].rightBound() << " " << u2[5].leftBound() << " " << u2[5].rightBound() << endl;
+
+        E_i += E_delta.right();
     }
 
 
 
     file.close();
 
-    return;
+    // return;
 
-    for(int i = 0; i < x_div; i++) {
+    // for(int i = 0; i < x_div; i++) {
 
-        LDVector w1{x_i,0,0,0,0,E.leftBound()};
-        LDVector w2{x_i,0,0,0,0,E.rightBound()};
-        LDVector w3{X.leftBound(),0,0,0,0,E_i};
-        LDVector w4{X.rightBound(),0,0,0,0,E_i};
+    //     LDVector w1{x_i,0,0,0,0,E.leftBound()};
+    //     LDVector w2{x_i,0,0,0,0,E.rightBound()};
+    //     LDVector w3{X.leftBound(),0,0,0,0,E_i};
+    //     LDVector w4{X.rightBound(),0,0,0,0,E_i};
 
-        // auto res1 = DD_inv * LDVector{w1[0],w1[5]};
-        // auto res2 = DD_inv * LDVector{w2[0],w2[5]};
-        // auto res3 = DD_inv * LDVector{w3[0],w3[5]};
-        // auto res4 = DD_inv * LDVector{w4[0],w4[5]};
+    //     // auto res1 = DD_inv * LDVector{w1[0],w1[5]};
+    //     // auto res2 = DD_inv * LDVector{w2[0],w2[5]};
+    //     // auto res3 = DD_inv * LDVector{w3[0],w3[5]};
+    //     // auto res4 = DD_inv * LDVector{w4[0],w4[5]};
 
-        auto res1 = quick_eval_non_rig(w1,T_total,T_total_inv);
-        auto res2 = quick_eval_non_rig(w2,T_total,T_total_inv);
-        auto res3 = quick_eval_non_rig(w3,T_total,T_total_inv);
-        auto res4 = quick_eval_non_rig(w4,T_total,T_total_inv);
+    //     auto res1 = quick_eval_non_rig(w1,T_total,T_total_inv);
+    //     auto res2 = quick_eval_non_rig(w2,T_total,T_total_inv);
+    //     auto res3 = quick_eval_non_rig(w3,T_total,T_total_inv);
+    //     auto res4 = quick_eval_non_rig(w4,T_total,T_total_inv);
 
-        file << x_i << " " << E.leftBound() << " " << res1[0] << " " << res1[1] << endl;
-        file << x_i << " " << E.rightBound() << " " << res2[0] << " " << res2[1] << endl;
-        file << X.leftBound() << " " << E_i << " " << res3[0] << " " << res3[1] << endl;
-        file << X.rightBound() << " " << E_i << " " << res4[0] << " " << res4[1] << endl;
+    //     file << x_i << " " << E.leftBound() << " " << res1[0] << " " << res1[1] << endl;
+    //     file << x_i << " " << E.rightBound() << " " << res2[0] << " " << res2[1] << endl;
+    //     file << X.leftBound() << " " << E_i << " " << res3[0] << " " << res3[1] << endl;
+    //     file << X.rightBound() << " " << E_i << " " << res4[0] << " " << res4[1] << endl;
 
-        E_i += E_delta;
-        x_i += x_delta;
+    //     E_i += E_delta;
+    //     x_i += x_delta;
         
-    }
+    // }
 
-    file.close();
+    // file.close();
 }
 
 void eval_rectangle(long double x_eps, long double y_eps, Interval E) {
