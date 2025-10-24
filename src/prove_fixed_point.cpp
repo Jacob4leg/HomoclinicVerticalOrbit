@@ -35,49 +35,42 @@ LDMatrix get_change_of_basis() {
 }
 
 
-bool prove_fixed_point(long double eps_x, long double eps_y, long double E_eps) {
+bool prove_fixed_point(LDVector v_E, Interval X, Interval Y, Interval E) {
     
     LDMatrix T = get_change_of_basis();
     IMatrix T_total = IMatrix(T_E * T);
 
-    Interval eps_interval_x(-eps_x,eps_x);
-    Interval eps_interval_y(-eps_y,eps_y);
-    Interval E(-E_eps,E_eps);
-    IVector u{  eps_interval_x,
-                0,
-                eps_interval_y,
-                eps_interval_y,
-                eps_interval_y, E};
+    IVector w{X,0,Y,Y,Y, E};
+    IVector u0(v_E);
+    
 
-    IVector u0{0,0,0,0,0,E};
-
-    IVector v = IVector(v0) + T_total * u;
-    v[3] = 0.;
-    v[5] = 0.;
+    IVector u = IVector(v_E) + T_total * w;
+    // v[3] = 0.;
+    // v[5] = 0.;
 
     IMatrix D(6,6);
-    C1HORect2Set S(v);
+    C1HORect2Set S(u);
     IVector y = Ivf.pm_z(S,D);
     D = Ivf.pm_z.computeDP(y,D);
     
-    IVector w{y[1],y[3]};
+    // IVector w{y[1],y[3]};
     IMatrix M({{D[1][0],D[1][4]},{D[3][0],D[3][4]}});
     
-    IVector v1 = IVector(v0) + T_total * u0;
 
-    C0HORect2Set S0(v1);
+    C0HORect2Set S0(u0);
     y = Ivf.pm_z(S0);
     IVector w0{y[1],y[3]};
 
     IVector N = - matrixAlgorithms::gauss(M,w0);
     
-    IVector X_ext = T_total * u;
-    IVector X{X_ext[0], X_ext[4]};
+    IVector Z_ext = T_total * u;
+    IVector Z{u[0] - u0[0], u[4] - u0[4]};
     
-    cout << X << endl;
-    cout << N << endl;
-
-    return subset(N,X);
+    // cout << Z << endl;
+    // cout << N << endl;
+    // cout << diam(N) << endl;
+    
+    return subset(N,Z);
 }
 
 Interval cone_coeff(long double eps_x, long double eps_y, Interval E) {
@@ -194,31 +187,6 @@ void rectangle() {
 
     LDVector w_new = T_total_inv * (w0 - v0);
 
-    // LDMatrix D1(6,6), D2(6,6), D(6,6);
-    // LDVector u = T_total * w_new + v0;
-    // LDVector u1 = vf.pm_x(u,D1);
-    // LDVector u2 = vf.pm_y(u1,D2);
-
-    // D1 = vf.pm_x.computeDP(u1,D1);
-    // D2 = vf.pm_y.computeDP(u2,D2);
-
-    // D = D2 * D1;
-
-    // D = D * T_total;
-
-    // LDMatrix D_inv = matrix_add_cord(matrixAlgorithms::gaussInverseMatrix(matrix_erase_cord(D,1)), 1);
-
-    // LDMatrix DD{{D[3][0], D[3][5]}, {D[5][0],D[5][5]}};
-    // LDMatrix DD_inv = matrixAlgorithms::gaussInverseMatrix(DD);
-
-    // cout << matrixAlgorithms::det(DD) << endl;
-
-    // w_new[5] += 1e-8;
-    // cout << w_new << endl;
-    // cout << quick_eval_non_rig(w_new,T_total) << endl;
-    // cout << DD_inv * quick_eval_non_rig(w_new, T_total) << endl;
-    // return;
-
     long double x0 = w_new[0];
     long double x_radius = 1e-8;
     
@@ -228,7 +196,7 @@ void rectangle() {
     int x_div = 3000;
     int E_div = 3000;
 
-    ofstream file("rectangle_lin.txt");
+    ofstream file("rectangle_lin_fixed_point.txt");
 
     Interval x_delta(0,(X.rightBound() - X.leftBound()) / x_div);
     Interval E_delta(0,(E.rightBound() - E.leftBound()) / E_div);
@@ -240,13 +208,21 @@ void rectangle() {
     Interval E_right = E.right();
     
     LDVector w{0,0,0,0,0,E_left.leftBound()};
-    IVector u_E(vf.findVerticalLyapunovOrbit(T_total * w + v0));
-    
+    LDVector v_E = vf.findVerticalLyapunovOrbit(T_total * w + v0);
+    IVector V_E(v_E);
+
+    Interval X_test(-1e-13,1e-13);
+    Interval Y_test(-1e-13,1e-13);
+    IVector W_test{X_test,0,Y_test,Y_test,Y_test,0};
+
+    if(!prove_fixed_point(v_E,X_test,Y_test,E_left)) {
+        throw runtime_error("Fixed point not proved.");
+    }
 
     for(int i = 0; i < x_div; i++) {
         if(i % 50 == 0) cout << i << endl;
 
-        C0HORect2Set S1(u_E,T_total, IVector{x_i,0,0,0,0,0});
+        C0HORect2Set S1(V_E,T_total, IVector{x_i,0,0,0,0,0} + W_test);
 
         IVector u1 = Ivf.pm_x(S1);
 
@@ -259,12 +235,17 @@ void rectangle() {
 
     x_i = X.left() + x_delta;
     w = LDVector{0,0,0,0,0,E_right.leftBound()};
-    u_E = IVector(vf.findVerticalLyapunovOrbit(T_total * w + v0));
+    v_E = vf.findVerticalLyapunovOrbit(T_total * w + v0);
+    V_E = IVector(v_E);
+
+    if(!prove_fixed_point(v_E,X_test,Y_test,E_right)) {
+        throw runtime_error("Fixed point not proved.");
+    }
 
     for(int i = 0; i < x_div; i++) {
         if(i % 50 == 0) cout << i << endl;
 
-        C0HORect2Set S1(u_E,T_total, IVector{x_i,0,0,0,0,0});
+        C0HORect2Set S1(V_E,T_total, IVector{x_i,0,0,0,0,0} + W_test);
         IVector u1 = Ivf.pm_x(S1);
 
         C0HORect2Set S2(u1);
@@ -281,9 +262,14 @@ void rectangle() {
         if(i % 50 == 0) cout << i << endl;
 
         w = LDVector{0,0,0,0,0,E_i.leftBound()};
-        u_E = IVector(vf.findVerticalLyapunovOrbit(T_total * w + v0));
+        v_E = vf.findVerticalLyapunovOrbit(T_total * w + v0);
+        V_E = IVector(v_E);
 
-        C0HORect2Set S1(u_E,T_total, IVector{x_left,0,0,0,0,0});
+        if(!prove_fixed_point(v_E,X_test,Y_test,E_i)) {
+            throw runtime_error("Fixed point not proved.");
+        }
+
+        C0HORect2Set S1(V_E,T_total, IVector{x_left,0,0,0,0,0} + W_test);
         IVector u1 = Ivf.pm_x(S1);
 
         C0HORect2Set S2(u1);
@@ -299,9 +285,14 @@ void rectangle() {
         if(i % 50 == 0) cout << i << endl;
 
         w = LDVector{0,0,0,0,0,E_i.leftBound()};
-        u_E = IVector(vf.findVerticalLyapunovOrbit(T_total * w + v0));
+        v_E = vf.findVerticalLyapunovOrbit(T_total * w + v0);
+        V_E = IVector(v_E);
 
-        C0HORect2Set S1(u_E,T_total, IVector{x_right,0,0,0,0,0});
+        if(!prove_fixed_point(v_E,X_test,Y_test,E_i)) {
+            throw runtime_error("Fixed point not proved.");
+        }
+
+        C0HORect2Set S1(V_E,T_total, IVector{x_right,0,0,0,0,0} + W_test);
         IVector u1 = Ivf.pm_x(S1);
 
         C0HORect2Set S2(u1);

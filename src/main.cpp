@@ -9,7 +9,26 @@ using namespace std;
 using namespace capd;
 
 int main() {
+    // CR3BP<long double> vf;
+    // LDVector w0{0.9468923401720671061132517L,-4.072102120831082499146823e-24L,0.05316795353478707980175375L,
+    //     -5.553112274845604899656097e-08L,-0.01115319054270743243833971L,-9.199674025000000205149813e-08L};
     
+    // ofstream file("homoclinic.txt");
+    // LDTimeMap tm(vf.solver);
+    // LDTimeMap::SolutionCurve sol(0.);
+    // long double T = 20;
+    // auto res = tm(T,w0,sol);
+    
+    // long double h = 0.01;
+    // int n = T / h;
+
+    // for(int i = 0; i < n; i++) {
+    //     long double x = h * i;
+    //     LDVector u = sol(x);
+    //     file << u[0] << " " << u[1] << " " << u[2] << endl;
+    // }
+    // file.close();
+
     cout.precision(15);
 
     // long double eps = 1e-6;
@@ -20,15 +39,25 @@ int main() {
     // test();
     // return 0;
 
-    long double eps_x = 15e-8;
-    // long double eps_y = 2e-9;
-    long double eps_y = 1.2e-8;
-    // long double E_eps = 1e-12;
-    long double E_eps = 1e-8;
-    // E_eps = 0.;
-    Interval E(-E_eps,1e-9);
-    // cout << prove_fixed_point(eps_x,eps_y,E_eps) << endl;
+    // long double eps_x = 15e-8;
+    // long double eps_y = 1.2e-8;
+    // long double E_eps = 1e-8;
+
+    long double eps_x = 3e-10;
+    long double eps_y = 1e-12;
+    long double E_eps = 1e-13;
+
+    // cout << eps_x << endl;
+    // cout << eps_y << endl;
+    // cout << E_eps << endl;
+
+    Interval X(-eps_x,eps_x);
+    Interval Y(-eps_y,eps_y);
+    Interval E(-E_eps,E_eps);
+    // cout << Y << endl;
+    // cout << prove_fixed_point(X,Y,E_eps) << endl;
     // cone_coeff(eps_x,eps_y,E_eps);
+
     eval_rectangle(eps_x,eps_y, E);
     // test(E);
 
