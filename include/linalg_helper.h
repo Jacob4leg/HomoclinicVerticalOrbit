@@ -1,4 +1,5 @@
 #include<iostream>
+#include<tuple>
 #include "capd/capdlib.h"
 
 
@@ -42,6 +43,27 @@ inline capd::vectalg::Matrix<T,0,0> matrix_add_cord(capd::vectalg::Matrix<T,0,0>
         }
     }
     return M_res;
+}
+
+inline std::tuple<long double, capd::LDVector> get_dominant_eigenvalue_and_eigenvector(capd::LDMatrix A) {
+    int n = A.numberOfRows();
+    assert(n == A.numberOfColumns());
+
+    capd::LDVector rV(n), iV(n);
+    capd::LDMatrix rVec(n,n), iVec(n,n);
+    capd::alglib::computeEigenvaluesAndEigenvectors(A,rV,iV,rVec,iVec);
+
+    int max_index = 0;
+    for(int i = 1; i < n; i++) {
+        long double module_i = rV[i] * rV[i] + iV[i] * iV[i];
+        long double module_max_index = rV[max_index] * rV[max_index] + iV[max_index] * iV[max_index];
+
+        if(module_i > module_max_index) max_index = i;
+    }
+    assert(iV[max_index] == 0);
+    long double lambda = rV[max_index];
+    capd::LDVector u = rVec.column(max_index);
+    return {lambda, u};
 }
 
 inline capd::LDMatrix energy_change_of_basis(capd::LDVector p, capd::LDMap &E) {

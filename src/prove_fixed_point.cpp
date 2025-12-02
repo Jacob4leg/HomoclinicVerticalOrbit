@@ -1,4 +1,5 @@
 #include "prove_fixed_point.h"
+#include<chrono>
 #include<fstream>
 
 using namespace std;
@@ -9,13 +10,21 @@ ICR3BP Ivf;
 
 long double z = 0.05316795030019990465013731L;
 LDVector v0 = vf.findVerticalLyapunovOrbit(LDVector({0.94690970780356629,0,z,0,-0.011166782657715382,0}));
+// LDMatrix B{ {1,0,0,0,0,0},
+//             {0,1,0,0,0,0},
+//             {0,0,1,0,0,0},
+//             {0,0,0,1008.04179513,0,85.38967319},
+//             {0,0,0,0,1,0},
+//             {0,0,0,-188.97139923,0,-112.39859377}};
+// LDMatrix B_inv = matrixAlgorithms::gaussInverseMatrix(B);
 long double E0 = vf.E(v0)[0];
 
-LDMatrix T_E = energy_change_of_basis(v0,vf.E);
+LDMatrix T0 = energy_change_of_basis(v0,vf.E);
 
-LDMatrix get_change_of_basis() {
+tuple<LDMatrix,LDMatrix> get_change_of_basis(LDVector v_E) {
+    LDMatrix T_E = energy_change_of_basis(v_E,vf.E);
     LDMatrix D = LDMatrix::Identity(6), T(6,6);
-    LDVector u = v0;
+    LDVector u = v_E;
     for(int i = 0; i < 2; i++) {
         u = vf.pm_y(u,T);
         D = vf.pm_y.computeDP(u,T) * D;
@@ -31,20 +40,20 @@ LDMatrix get_change_of_basis() {
     LDMatrix L = us_change_of_basis(D_new);
     
     // cout << matrixAlgorithms::gaussInverseMatrix(L) * D_new * L << endl;
-    return matrix_add_cord(L,1);
+    return {T_E,matrix_add_cord(L,1)};
 }
 
 
-bool prove_fixed_point(LDVector v_E, Interval X, Interval Y, Interval E) {
+bool prove_fixed_point(LDVector v_E, Interval X, Interval Y, Interval E, const LDMatrix &T) {
     
-    LDMatrix T = get_change_of_basis();
-    IMatrix T_total = IMatrix(T_E * T);
+    // LDMatrix T = get_change_of_basis();
+    IMatrix T_total = IMatrix(T);
 
     IVector w{X,0,Y,Y,Y, E};
     IVector u0(v_E);
     
 
-    IVector u = IVector(v_E) + T_total * w;
+    IVector u = u0 + T_total * w;
     // v[3] = 0.;
     // v[5] = 0.;
 
@@ -65,27 +74,26 @@ bool prove_fixed_point(LDVector v_E, Interval X, Interval Y, Interval E) {
     
     IVector Z_ext = T_total * u;
     IVector Z{u[0] - u0[0], u[4] - u0[4]};
-    
-    // cout << Z << endl;
-    // cout << N << endl;
-    // cout << diam(N) << endl;
-    
+
+    // cout << "N=" << N << endl;
+    // cout << "Z=" << Z << endl;
+    // cout << endl;
     return subset(N,Z);
 }
 
-Interval cone_coeff(long double eps_x, long double eps_y, Interval E) {
-    LDMatrix T = get_change_of_basis();
+Interval cone_coeff(int division_x, int division_E, Interval E, const LDVector &v_E, const LDMatrix &T) {
     
-    IMatrix T_total(T_E * T);
-    IMatrix T_total_inv(matrix_add_cord(matrixAlgorithms::gaussInverseMatrix(matrix_erase_cord(T_E * T,1)),1));
+    long double eps_x = 1e-7;
+    long double eps_y = 1e-8;
+
+    IMatrix T_total(T);
+    IMatrix T_total_inv(matrix_add_cord(matrixAlgorithms::gaussInverseMatrix(matrix_erase_cord(T,1)),1));
 
     Interval eps_interval_x(0,eps_x);
     Interval eps_interval_y(-eps_y,eps_y);
     // Interval E(-E_eps,E_eps);
 
-    int division_E = 1;
-    int division_x = 10;
-
+    long double x_delta = eps_x / division_x;
     long double E_delta = (E.rightBound() - E.leftBound()) / division_E;
     long double E_begin = E.leftBound();
     long double E_end = E.leftBound() + E_delta;
@@ -94,12 +102,13 @@ Interval cone_coeff(long double eps_x, long double eps_y, Interval E) {
     IMatrix D_total(5,5);
 
     for(int i = 0; i < division_E; i++) {
-        long double x_delta = eps_x / division_x;
+        
         Interval X_j(0,x_delta);
-
+        
         for(int j = 0; j < division_x; j++) {
-            IVector u{eps_interval_x,0,eps_interval_y,eps_interval_y,eps_interval_y, E_i};
-            C1HORect2Set S(C1Rect2Set::C0BaseSet(IVector(v0),T_total,u), C1Rect2Set::C1BaseSet(T_total));
+            
+            IVector u{X_j,0,eps_interval_y,eps_interval_y,eps_interval_y, E_i};
+            C1HORect2Set S(C1Rect2Set::C0BaseSet(IVector(v_E),T_total,u), C1Rect2Set::C1BaseSet(T_total));
             IMatrix D(6,6);
             IVector y = Ivf.pm_y(S,D,2);
             D = Ivf.pm_y.computeDP(y,D);
@@ -160,8 +169,166 @@ LDVector quick_eval_non_rig(LDVector w, const LDMatrix &T, const LDMatrix &T_inv
     return LDVector{u2[3],u2[5]};
 }
 
-void rectangle() {
 
+tuple<LDMatrix,LDMatrix,LDMatrix,LDMatrix> get_poincare_changes_of_basis(LDMatrix T_total_0, long double x0, long double x_delta, long double E_delta) {
+    LDVector v_E = vf.findVerticalLyapunovOrbit(v0 + T0 * LDVector{0,0,0,0,0,E_delta});
+    
+    auto Q = get_change_of_basis(v_E);
+    LDMatrix T_total_E(get<0>(Q) * get<1>(Q));
+
+    LDVector w0 = v0 + T_total_0 * LDVector{x0,0,0,0,0,0};
+
+    LDMatrix D(6,6);
+    LDVector u = vf.pm_x(w0,D);
+    D = vf.pm_x.computeDP(u,D);
+
+    // cout << D << endl;
+
+    // LDVector rV(6), iV(6);
+    // LDMatrix rVec(6,6), iVec(6,6);
+    // computeEigenvaluesAndEigenvectors(D,rV,iV,rVec,iVec);
+    D = us_change_of_basis(D);
+    // cout << D << endl;
+
+    LDVector w1 = v0 + T_total_0 * LDVector{x0 + x_delta,0,0,0,0,0};
+    LDVector w2 = v_E + T_total_E * LDVector{x0,0,0,0,0,0};
+
+    LDVector Pw1_x = vf.pm_x(w1);
+    LDVector Pw2_x = vf.pm_x(w2);
+    Pw1_x[0] = 0.; Pw2_x[0] = 0.;
+
+    LDSumNorm norm;
+
+    LDMatrix Phi_X = LDMatrix::Identity(6);
+    Phi_X = D;
+    // Phi_X.column(0) = LDVector{1,0,0,0,0,0};
+    Phi_X.row(0) = LDVector{1,0,0,0,0,0};
+    Phi_X.column(0) = u / norm(u);
+
+    // Phi_X.column(1) = Pw1_x;
+    // Phi_X.column(2) = Pw2_x;
+    
+
+    LDVector Pw1_y = vf.pm_y(Pw1_x);
+    LDVector Pw2_y = vf.pm_y(Pw2_x);
+
+    LDMatrix Phi_Y = LDMatrix::Identity(6);
+
+    Phi_Y[3][3] = Pw1_y[3]; Phi_Y[3][5] = Pw2_y[3];
+    Phi_Y[5][3] = Pw1_y[5]; Phi_Y[5][5] = Pw2_y[5];
+
+    return {matrixAlgorithms::gaussInverseMatrix(Phi_X),Phi_X,matrixAlgorithms::gaussInverseMatrix(Phi_Y),Phi_Y};
+}
+
+void rectangle_non_rig() {
+    LDMatrix O1(6,6), O2(6,6), O(6,6);
+    LDVector v1 = vf.pm_y(v0,O1);
+    LDVector v2 = vf.pm_y(v1,O2);
+
+    O1 = vf.pm_y.computeDP(v1,O1);
+    O2 = vf.pm_y.computeDP(v2,O2);
+
+    O = O2 * O1;
+    auto [lambda, v_eig] = get_dominant_eigenvalue_and_eigenvector(O);
+
+    LDVector w0{0.9468923401720671061132517L,-4.072102120831082499146823e-24L,0.05316795353478707980175375L,
+        -5.553112274845604899656097e-08L,-0.01115319054270743243833971L,-9.199674025000000205149813e-08L};
+    
+    
+    auto [T_E, T] = get_change_of_basis(v0);
+    LDMatrix T_total(T_E * T);
+    LDMatrix T_total_inv(matrix_add_cord(matrixAlgorithms::gaussInverseMatrix(matrix_erase_cord(T_E * T,1)),1));
+
+    LDVector w_new = T_total_inv * (w0 - v0);
+
+    long double x0 = w_new[0];
+    long double x_radius = 1e-8;
+    long double E_radius = 1e-4;
+
+    auto [B,B_inv,C,C_inv] = get_poincare_changes_of_basis(T_total,x0,x_radius,E_radius);
+
+    Interval X(x0 - x_radius, x0 + x_radius);
+    Interval E(-E_radius,E_radius);
+
+    int x_div = 300;
+    int E_div = 300;
+
+    ofstream file("rectangle_non_rig.txt");
+
+    long double x_delta = 2 * x_radius / x_div;
+    long double E_delta = 2 * E_radius / E_div;
+    
+    long double x_i = X.leftBound();
+    long double E_i = E.leftBound();
+
+    LDVector w{0,0,0,0,0,-E_radius};
+    LDVector v_E = vf.findVerticalLyapunovOrbit(T_total * w + v0);
+    T_total = get<0>(get_change_of_basis(v_E)) * get<1>(get_change_of_basis(v_E));
+
+    // A = LDMatrix::Identity(2);
+    // LDMatrix A_inv = matrixAlgorithms::gaussInverseMatrix(A);
+    
+    for(int i = 0; i < x_div; i++) {
+        LDVector v_i = v_E + T_total * LDVector{x_i,0,0,0,0,0};
+        LDVector v1 = vf.pm_x(v_i);
+        LDVector v2 = vf.pm_y(v1);
+
+        auto res = v2;
+
+        file << res[3] << " " << res[5] << endl;
+        x_i += x_delta;
+    }
+
+    w = LDVector{0,0,0,0,0,E_radius};
+    v_E = vf.findVerticalLyapunovOrbit(T_total * w + v0);
+    T_total = get<0>(get_change_of_basis(v_E)) * get<1>(get_change_of_basis(v_E));
+    x_i = X.leftBound();
+
+    for(int i = 0; i < x_div; i++) {
+        LDVector v_i = v_E + T_total * LDVector{x_i,0,0,0,0,0};
+        LDVector v1 = vf.pm_x(v_i);
+        LDVector v2 = vf.pm_y(v1);
+
+        auto res = v2;
+
+        file << res[3] << " " << res[5] << endl;
+        x_i += x_delta;
+    }
+
+    for(int i = 0; i < E_div; i++) {
+        w = LDVector{0,0,0,0,0,E_i};
+        v_E = vf.findVerticalLyapunovOrbit(T_total * w + v0);
+        T_total = get<0>(get_change_of_basis(v_E)) * get<1>(get_change_of_basis(v_E));
+        LDVector v_i = v_E + T_total * LDVector{X.leftBound(),0,0,0,0,0};
+        LDVector v1 = vf.pm_x(v_i);
+        LDVector v2 = vf.pm_y(v1);
+
+        auto res = v2;
+
+        file << res[3] << " " << res[5] << endl;
+        E_i += E_delta;
+    }
+    
+    E_i = E.leftBound();
+
+    for(int i = 0; i < E_div; i++) {
+        w = LDVector{0,0,0,0,0,E_i};
+        v_E = vf.findVerticalLyapunovOrbit(T_total * w + v0);
+        T_total = get<0>(get_change_of_basis(v_E)) * get<1>(get_change_of_basis(v_E));
+        LDVector v_i = v_E + T_total * LDVector{X.rightBound(),0,0,0,0,0};
+        LDVector v1 = vf.pm_x(v_i);
+        LDVector v2 = vf.pm_y(v1);
+        
+        auto res = v2;
+
+        file << res[3] << " " << res[5] << endl;
+        E_i += E_delta;
+    }
+}
+
+void rectangle() {
+    // rectangle_non_rig();
+    // return;
 
     LDMatrix O1(6,6), O2(6,6), O(6,6);
     LDVector v1 = vf.pm_y(v0,O1);
@@ -181,22 +348,36 @@ void rectangle() {
         -5.553112274845604899656097e-08L,-0.01115319054270743243833971L,-9.199674025000000205149813e-08L};
     
     
-    LDMatrix T = get_change_of_basis();
+    auto [T_E, T] = get_change_of_basis(v0);
     LDMatrix T_total(T_E * T);
     LDMatrix T_total_inv(matrix_add_cord(matrixAlgorithms::gaussInverseMatrix(matrix_erase_cord(T_E * T,1)),1));
+
+    cout << T_total_inv * O * T_total << endl;
+    return;
 
     LDVector w_new = T_total_inv * (w0 - v0);
 
     long double x0 = w_new[0];
-    long double x_radius = 1e-8;
+    long double x_to_change_of_basis = 1e-10;
+    long double E_to_change_of_basis = 1e-5;
+
+    long double x_radius = 1e-10;
+    long double E_radius = 1e-7;
+
+    auto [B,B_inv,C,C_inv] = get_poincare_changes_of_basis(T_total,x0,x_radius,E_radius);
+
+    // auto [B,B_inv,C,C_inv] = get_poincare_changes_of_basis(T_total,x0,x_to_change_of_basis,E_to_change_of_basis);
+
+    // return;
+    
     
     Interval X(x0 - x_radius, x0 + x_radius);
-    Interval E(-1e-4,1e-4);
+    Interval E(-E_radius,E_radius);
+        
+    int x_div = 1000;
+    int E_div = 50000;
 
-    int x_div = 3000;
-    int E_div = 3000;
-
-    ofstream file("rectangle_lin_fixed_point.txt");
+    ofstream file("rectangle_lin_cone.txt");
 
     Interval x_delta(0,(X.rightBound() - X.leftBound()) / x_div);
     Interval E_delta(0,(E.rightBound() - E.leftBound()) / E_div);
@@ -210,70 +391,111 @@ void rectangle() {
     LDVector w{0,0,0,0,0,E_left.leftBound()};
     LDVector v_E = vf.findVerticalLyapunovOrbit(T_total * w + v0);
     IVector V_E(v_E);
+    auto T_tuple = get_change_of_basis(v_E);
+    T_E = get<0>(T_tuple);
+    T = get<1>(T_tuple);
+    T_total = T_E * T;
 
     Interval X_test(-1e-13,1e-13);
     Interval Y_test(-1e-13,1e-13);
     IVector W_test{X_test,0,Y_test,Y_test,Y_test,0};
 
-    if(!prove_fixed_point(v_E,X_test,Y_test,E_left)) {
+    Interval unit_interval(-1,1);
+    IVector unit_center_stable_cube{0,0,unit_interval,unit_interval,unit_interval,0};
+
+    if(!prove_fixed_point(v_E,X_test,Y_test,Interval(-1e-13,1e-13),T_total)) {
         throw runtime_error("Fixed point not proved.");
     }
+
+    Interval returnTime;
+    IVector zero_vector{0,0,0,0,0,0};
+    IVector PW0(vf.pm_x(w0));
+
+    
+
+    Interval alpha = cone_coeff(20,1,Interval(-1e-13,1e-13),v_E,T_total);
+    cout << alpha << endl;
+    
+    chrono::steady_clock::time_point beg = chrono::steady_clock::now();
+    chrono::steady_clock::time_point end;
 
     for(int i = 0; i < x_div; i++) {
         if(i % 50 == 0) cout << i << endl;
 
-        C0HORect2Set S1(V_E,T_total, IVector{x_i,0,0,0,0,0} + W_test);
-
-        IVector u1 = Ivf.pm_x(S1);
-
-        C0HORect2Set S2(u1);
-        IVector u2 = Ivf.pm_y(S2);
+        C0HOTripletonSet S1(V_E,T_total, IVector{x_i,0,0,0,0,0} + W_test + unit_center_stable_cube * x_i * alpha);
+        Ivf.pm_x(S1);
+        IVector u2 = Ivf.pm_y(S1, zero_vector, C, returnTime);
+        
 
         file << u2[3].leftBound() << " " << u2[3].rightBound() << " " << u2[5].leftBound() << " " << u2[5].rightBound() << endl;
         x_i += x_delta.right();
     }
+    
+    end = chrono::steady_clock::now();
+    cout << "First edge calculated after " << chrono::duration_cast<chrono::minutes>(end - beg).count() << " min " 
+                                            << chrono::duration_cast<chrono::seconds>(end - beg).count() % 60 << " sec." << endl;
 
     x_i = X.left() + x_delta;
     w = LDVector{0,0,0,0,0,E_right.leftBound()};
     v_E = vf.findVerticalLyapunovOrbit(T_total * w + v0);
     V_E = IVector(v_E);
-
-    if(!prove_fixed_point(v_E,X_test,Y_test,E_right)) {
+    T_tuple = get_change_of_basis(v_E);
+    T_E = get<0>(T_tuple);
+    T = get<1>(T_tuple);
+    T_total = T_E * T;
+    
+    if(!prove_fixed_point(v_E,X_test,Y_test,E_right,T_total)) {
         throw runtime_error("Fixed point not proved.");
     }
+
+    alpha = cone_coeff(20,1,0,v_E,T_total);
+    cout << alpha << endl;
 
     for(int i = 0; i < x_div; i++) {
         if(i % 50 == 0) cout << i << endl;
 
-        C0HORect2Set S1(V_E,T_total, IVector{x_i,0,0,0,0,0} + W_test);
-        IVector u1 = Ivf.pm_x(S1);
-
-        C0HORect2Set S2(u1);
-        IVector u2 = Ivf.pm_y(S2);
+        C0HOTripletonSet S1(V_E,T_total, IVector{x_i,0,0,0,0,0} + W_test + unit_center_stable_cube * x_i * alpha);
+        Ivf.pm_x(S1);
+        IVector u2 = Ivf.pm_y(S1, zero_vector, C, returnTime);
 
         file << u2[3].leftBound() << " " << u2[3].rightBound() << " " << u2[5].leftBound() << " " << u2[5].rightBound() << endl;
         x_i += x_delta.right();
     }
 
+    chrono::steady_clock::time_point beg1 = chrono::steady_clock::now();
+    end = chrono::steady_clock::now();
+    cout << "Two edges calculated after " << chrono::duration_cast<chrono::minutes>(end - beg).count() << " min " 
+                                            << chrono::duration_cast<chrono::seconds>(end - beg).count() % 60 << " sec." << endl;
+
     Interval x_left = X.left();
     Interval x_right = X.right();
 
     for(int i = 0; i < E_div; i++) {
-        if(i % 50 == 0) cout << i << endl;
-
+        if(i % 500 == 0 && i > 0) {
+            end = chrono::steady_clock::now();
+            cout << "Third edge calculated with " << (i * 100) / E_div << "% progress." << 
+            "Time elapsed: " << chrono::duration_cast<chrono::minutes>(end - beg1).count() << " min " 
+                                << chrono::duration_cast<chrono::seconds>(end - beg1).count() % 60 << " sec." <<  endl;
+        } 
+        
         w = LDVector{0,0,0,0,0,E_i.leftBound()};
         v_E = vf.findVerticalLyapunovOrbit(T_total * w + v0);
         V_E = IVector(v_E);
-
-        if(!prove_fixed_point(v_E,X_test,Y_test,E_i)) {
+        T_tuple = get_change_of_basis(v_E);
+        T_E = get<0>(T_tuple);
+        T = get<1>(T_tuple);
+        T_total = T_E * T;
+        
+        if(!prove_fixed_point(v_E,X_test,Y_test,E_delta,T_total)) {
             throw runtime_error("Fixed point not proved.");
         }
 
-        C0HORect2Set S1(V_E,T_total, IVector{x_left,0,0,0,0,0} + W_test);
-        IVector u1 = Ivf.pm_x(S1);
+        alpha = cone_coeff(1,1,E_delta,v_E,T_total);
 
-        C0HORect2Set S2(u1);
-        IVector u2 = Ivf.pm_y(S2);
+        C0HOTripletonSet S1(V_E,T_total, IVector{x_left,0,0,0,0,E_delta} + W_test + unit_center_stable_cube * x_left * alpha);
+        Ivf.pm_x(S1);
+        IVector u2 = Ivf.pm_y(S1, zero_vector, C, returnTime);
+
         file << u2[3].leftBound() << " " << u2[3].rightBound() << " " << u2[5].leftBound() << " " << u2[5].rightBound() << endl;
 
         E_i += E_delta.right();
@@ -281,28 +503,44 @@ void rectangle() {
 
     E_i = E.left() + E_delta;
 
+    beg1 = chrono::steady_clock::now();
+    end = chrono::steady_clock::now();
+    cout << "Three edges calculated after " << chrono::duration_cast<chrono::minutes>(end - beg).count() << " min " 
+                                            << chrono::duration_cast<chrono::seconds>(end - beg).count() % 60 << " sec." << endl;
+
     for(int i = 0; i < E_div; i++) {
-        if(i % 50 == 0) cout << i << endl;
+        if(i % 500 == 0 && i > 0) {
+            end = chrono::steady_clock::now();
+            cout << "Fourth edge calculated with " << (i * 100) / E_div << "% progress." << 
+            "Time elapsed: " << chrono::duration_cast<chrono::minutes>(end - beg1).count() << " min " 
+                                << chrono::duration_cast<chrono::seconds>(end - beg1).count() % 60 << " sec." <<  endl;
+        }
 
         w = LDVector{0,0,0,0,0,E_i.leftBound()};
         v_E = vf.findVerticalLyapunovOrbit(T_total * w + v0);
         V_E = IVector(v_E);
+        T_tuple = get_change_of_basis(v_E);
+        T_E = get<0>(T_tuple);
+        T = get<1>(T_tuple);
+        T_total = T_E * T;
 
-        if(!prove_fixed_point(v_E,X_test,Y_test,E_i)) {
+        if(!prove_fixed_point(v_E,X_test,Y_test,E_delta,T_total)) {
             throw runtime_error("Fixed point not proved.");
         }
+        
+        alpha = cone_coeff(1,1,E_delta,v_E,T_total);
 
-        C0HORect2Set S1(V_E,T_total, IVector{x_right,0,0,0,0,0} + W_test);
-        IVector u1 = Ivf.pm_x(S1);
-
-        C0HORect2Set S2(u1);
-        IVector u2 = Ivf.pm_y(S2);
+        C0HOTripletonSet S1(V_E,T_total, IVector{x_right,0,0,0,0,E_delta} + W_test + unit_center_stable_cube * x_right * alpha);
+        Ivf.pm_x(S1);
+        IVector u2 = Ivf.pm_y(S1, zero_vector, C, returnTime);
         file << u2[3].leftBound() << " " << u2[3].rightBound() << " " << u2[5].leftBound() << " " << u2[5].rightBound() << endl;
 
         E_i += E_delta.right();
     }
 
-
+    end = chrono::steady_clock::now();
+    cout << "All edges calculated after " << chrono::duration_cast<chrono::minutes>(end - beg).count() << " min " 
+                                            << chrono::duration_cast<chrono::seconds>(end - beg).count() % 60 << " sec." << endl;
 
     file.close();
 
@@ -343,209 +581,93 @@ void eval_rectangle(long double x_eps, long double y_eps, Interval E) {
     return;
 
 
-    LDVector w0{0.9468923401720671061132517L,-4.072102120831082499146823e-24L,0.05316795353478707980175375L,
-        -5.553112274845604899656097e-08L,-0.01115319054270743243833971L,-9.199674025000000205149813e-08L};
+    // LDVector w0{0.9468923401720671061132517L,-4.072102120831082499146823e-24L,0.05316795353478707980175375L,
+    //     -5.553112274845604899656097e-08L,-0.01115319054270743243833971L,-9.199674025000000205149813e-08L};
     
     
-    LDMatrix T = get_change_of_basis();
-    IMatrix T_total(T_E * T);
-    LDMatrix T_total_inv(matrix_add_cord(matrixAlgorithms::gaussInverseMatrix(matrix_erase_cord(T_E * T,1)),1));
+    // LDMatrix T = get_change_of_basis();
+    // IMatrix T_total(T_E * T);
+    // LDMatrix T_total_inv(matrix_add_cord(matrixAlgorithms::gaussInverseMatrix(matrix_erase_cord(T_E * T,1)),1));
 
-    LDVector w_new = T_total_inv * (w0 - v0);
-    long double x0 = w_new[0];
-
-    // Interval E_left = E.left();
-    // Interval E_right = E.right();
-    // Interval alpha_1 = cone_coeff(x_eps,y_eps, E_left);
-    // Interval alpha_2 = cone_coeff(x_eps,y_eps,E_right);
-    
-
-    long double x_delta = 2e-8;
-    Interval X(x0 - x_delta, x0 + x_delta);
-    
-    int x_div = 10000;
-    int E_div = 10000;
-
-    // ofstream file("data1.txt");
-    Interval alpha = cone_coeff(x_eps, y_eps, E.left());
-    // cout << alpha << endl;
-
-
-    Interval X_delta(0, (X.rightBound() - X.leftBound()) / x_div );
-    Interval X_i = X.left() + X_delta;
-    Interval E_delta(0, (E.rightBound() - E.leftBound()) / E_div);
-    Interval E_i = E.left() + E_delta;
-
-    for(int i = 0; i < x_div; i++) {
-        
-        Interval Y( -(X_i * alpha).leftBound(), (X_i * alpha).rightBound() );
-        Y = 0;
-
-        IVector W1{X_i,0,Y,Y,Y,E.left()};
-        IVector W2{X_i,0,Y,Y,Y,E.right()};
-        auto res1 = quick_eval(W1,T_total);
-        auto res2 = quick_eval(W2,T_total);
-        
-        // file << res1[0].leftBound() << " " << res1[0].rightBound() << " " << res1[1].leftBound() << " " << res1[1].rightBound() << endl;
-        cout << res2[0].leftBound() << " " << res2[0].rightBound() << " " << res2[1].leftBound() << " " << res2[1].rightBound() << endl;
-        X_i += X_delta.right();
-    }
-    
-    alpha = cone_coeff(x_eps, y_eps, E.left() + 100 * E_delta);
-    for(int i = 0; i < E_div; i++) {
-        // if(i % 100 == 0) {
-        //     alpha = cone_coeff(x_eps, y_eps, E_i + 100 * E_delta);
-        //     cout << alpha << endl;
-        // }
-        
-        Interval Y1( -(X.left() * alpha).leftBound(), (X.left() * alpha).rightBound());
-        Interval Y2( -(X.right() * alpha).leftBound(), (X.right() * alpha).rightBound());
-        
-        Y1 = 0;
-        Y2 = 0;
-
-        IVector W1{X.left(),0,Y1,Y1,Y1,E_i};
-        IVector W2{X.right(),0,Y2,Y2,Y2,E_i};
-        auto res1 = quick_eval(W1,T_total);
-        auto res2 = quick_eval(W2,T_total);
-
-        // file << res1[0].leftBound() << " " << res1[0].rightBound() << " " << res1[1].leftBound() << " " << res1[1].rightBound() << endl;
-        // file << res2[0].leftBound() << " " << res2[0].rightBound() << " " << res2[1].leftBound() << " " << res2[1].rightBound() << endl;
-        E_i += E_delta.right();
-    }
-
-
-    // file.close();
-
-    // Interval Y1 = (x0 - x_delta) * alpha_1; // x_left x E_left
-    // Interval Y2 = (x0 - x_delta) * alpha_2; // x_left x E_right
-    // Interval Y3 = (x0 + x_delta) * alpha_1; // x_right x E_left
-    // Interval Y4 = (x0 + x_delta) * alpha_2; // x_right x E_right
-
-    // IVector W1{x0 - x_delta, 0, Y1, Y1, Y1, E_left};
-    // IVector W2{x0 - x_delta, 0, Y2, Y2, Y2, E_right};
-    // IVector W3{x0 + x_delta, 0, Y3, Y3, Y3, E_left};
-    // IVector W4{x0 + x_delta, 0, Y4, Y4, Y4, E_right};
-
-    // cout << quick_eval(W1,T_total) << endl;
-    // cout << quick_eval(W2,T_total) << endl;
-    // cout << quick_eval(W3,T_total) << endl;
-    // cout << quick_eval(W4,T_total) << endl;
-    
-}
-
-void test(Interval E) {
-    long double alpha = 0.1103049783L;
-    // long double alpha = 0.;
-    
-    LDVector w0{0.9468923401720671061132517L,-4.072102120831082499146823e-24L,0.05316795353478707980175375L,
-        -5.553112274845604899656097e-08L,-0.01115319054270743243833971L,-9.199674025000000205149813e-08L};
-    
-    
-    // cout << 9.199674025e-08 * 0.1103049783 << endl;
-
-    LDMatrix T = get_change_of_basis();
-    
-    IMatrix T_total(T_E * T);
-    LDMatrix T_total_inv(matrix_add_cord(matrixAlgorithms::gaussInverseMatrix(matrix_erase_cord(T_E * T,1)),1));
-
-    
-
-    LDMatrix D = LDMatrix::Identity(6), Phi(6,6);
-    LDVector u = v0;
-    for(int i = 0; i < 2; i++) {
-        u = vf.pm_y(u,Phi);
-        D = vf.pm_y.computeDP(u,Phi) * D;
-    }
-
-    LDVector w_new = T_total_inv * (w0 - v0);
-    
-    double x0 = w_new[0];
-    cout << x0 << endl;
-    double x_eps = 5e-8;
-    double y_eps = (x0 - x_eps) * alpha; 
-    Interval Y(-y_eps,y_eps);
-    // y_eps = 1e-5;
-
-    cout << x0 << endl;
-    IVector W{x0,0,0,0,0,0};
-    IVector W1{W[0] - x_eps, 0, Y, Y, Y, E.left()};
-    IVector W2{W[0] + x_eps, 0, Y, Y, Y, E.left()};
-    IVector W3{W[0] - x_eps, 0, Y, Y, Y, E.right()};
-    IVector W4{W[0] + x_eps, 0, Y, Y, Y, E.right()};
-
-    cout << quick_eval(W,T_total) << endl;
-    cout << quick_eval(W1,T_total) << endl;
-    cout << quick_eval(W2,T_total) << endl;
-    cout << quick_eval(W3,T_total) << endl;
-    cout << quick_eval(W4,T_total) << endl;
-
-    // cout << W1 << endl;
-    // cout << W2 << endl;
-    // cout << quick_eval(W1, T_total) << endl;
-    // cout << quick_eval(W2, T_total) << endl;
-    
-
-    // return;
-    
-    // long double x_eps = 5e-9;
+    // LDVector w_new = T_total_inv * (w0 - v0);
     // long double x0 = w_new[0];
-    // long double x_minus = x0 - x_eps;
-    // long double x_plus = x0 + x_eps;
 
-    // // cout << x_minus << endl;
-    // // cout << x_plus << endl;
-
-    // long double y_lower_bound = -alpha * x_minus;
-    // long double y_upper_bound = alpha * x_minus;
+    // // Interval E_left = E.left();
+    // // Interval E_right = E.right();
+    // // Interval alpha_1 = cone_coeff(x_eps,y_eps, E_left);
+    // // Interval alpha_2 = cone_coeff(x_eps,y_eps,E_right);
     
-    // Interval x_bound(x_minus,x_plus);
-    // Interval y_bound(y_lower_bound, y_upper_bound);
-    // IVector left_cover{x_bound.left(),0,y_bound, y_bound, y_bound, E};
-    // IVector right_cover{x_bound.right(),0,y_bound, y_bound, y_bound, E};
-    // IVector lower_cover{x_bound,0,y_bound.left(),y_bound.left(),y_bound.left(),E};
-    // IVector upper_cover{x_bound,0,y_bound.right(),y_bound.right(),y_bound.right(),E};
 
-    // string file_name = "data.txt";
-    // ofstream file(file_name);
-    // file.precision(15);
+    // long double x_delta = 2e-8;
+    // Interval X(x0 - x_delta, x0 + x_delta);
+    
+    // int x_div = 10000;
+    // int E_div = 10000;
 
-    // int x_division = 2000;
-    // long double x_delta = 2 * x_eps / x_division;
-    // interval X_i(0, x_delta);
-    // X_i += x_bound.left();
+    // // ofstream file("data1.txt");
+    // Interval alpha = cone_coeff(x_eps, y_eps, E.left());
+    // // cout << alpha << endl;
 
-    // for(int i = 0; i < x_division; i++) {
+
+    // Interval X_delta(0, (X.rightBound() - X.leftBound()) / x_div );
+    // Interval X_i = X.left() + X_delta;
+    // Interval E_delta(0, (E.rightBound() - E.leftBound()) / E_div);
+    // Interval E_i = E.left() + E_delta;
+
+    // for(int i = 0; i < x_div; i++) {
         
-    //     IVector lower_i{X_i,0,y_bound.left(),y_bound.left(),y_bound.left(),E};
-    //     IVector upper_i{X_i,0,y_bound.right(),y_bound.right(),y_bound.right(),E};
+    //     Interval Y( -(X_i * alpha).leftBound(), (X_i * alpha).rightBound() );
+    //     Y = 0;
 
-    //     cout << lower_i << endl;
-    //     cout << upper_i << endl;
+    //     IVector W1{X_i,0,Y,Y,Y,E.left()};
+    //     IVector W2{X_i,0,Y,Y,Y,E.right()};
+    //     auto res1 = quick_eval(W1,T_total);
+    //     auto res2 = quick_eval(W2,T_total);
+        
+    //     // file << res1[0].leftBound() << " " << res1[0].rightBound() << " " << res1[1].leftBound() << " " << res1[1].rightBound() << endl;
+    //     cout << res2[0].leftBound() << " " << res2[0].rightBound() << " " << res2[1].leftBound() << " " << res2[1].rightBound() << endl;
+    //     X_i += X_delta.right();
+    // }
+    
+    // alpha = cone_coeff(x_eps, y_eps, E.left() + 100 * E_delta);
+    // for(int i = 0; i < E_div; i++) {
+    //     // if(i % 100 == 0) {
+    //     //     alpha = cone_coeff(x_eps, y_eps, E_i + 100 * E_delta);
+    //     //     cout << alpha << endl;
+    //     // }
+        
+    //     Interval Y1( -(X.left() * alpha).leftBound(), (X.left() * alpha).rightBound());
+    //     Interval Y2( -(X.right() * alpha).leftBound(), (X.right() * alpha).rightBound());
+        
+    //     Y1 = 0;
+    //     Y2 = 0;
 
-    //     cout << quick_eval(lower_i,T_total) << endl;
-    //     cout << quick_eval(upper_i,T_total) << endl;
-    //     cout << "XD" << endl;
+    //     IVector W1{X.left(),0,Y1,Y1,Y1,E_i};
+    //     IVector W2{X.right(),0,Y2,Y2,Y2,E_i};
+    //     auto res1 = quick_eval(W1,T_total);
+    //     auto res2 = quick_eval(W2,T_total);
 
-    //     break;
-
-    //     C0HORect2Set S_lower(C1Rect2Set::C0BaseSet(IVector(v0),T_total,lower_i));
-    //     C0HORect2Set S_upper(C1Rect2Set::C0BaseSet(IVector(v0),T_total,upper_i));
-
-    //     IVector y_lower = Ivf.pm_x(S_lower);
-    //     IVector y_upper = Ivf.pm_x(S_upper);
-
-    //     C0HORect2Set S1_lower(y_lower);
-    //     C0HORect2Set S1_upper(y_upper);
-
-    //     IVector z_lower = Ivf.pm_y(S1_lower);
-    //     IVector z_upper = Ivf.pm_y(S1_upper);
-
-    //     file << z_lower[3] << " " << z_lower[5] << endl;
-    //     file << z_upper[3] << " " << z_upper[5] << endl;
-
-    //     X_i += x_delta;
+    //     // file << res1[0].leftBound() << " " << res1[0].rightBound() << " " << res1[1].leftBound() << " " << res1[1].rightBound() << endl;
+    //     // file << res2[0].leftBound() << " " << res2[0].rightBound() << " " << res2[1].leftBound() << " " << res2[1].rightBound() << endl;
+    //     E_i += E_delta.right();
     // }
 
-    // file.close();
+
+    // // file.close();
+
+    // // Interval Y1 = (x0 - x_delta) * alpha_1; // x_left x E_left
+    // // Interval Y2 = (x0 - x_delta) * alpha_2; // x_left x E_right
+    // // Interval Y3 = (x0 + x_delta) * alpha_1; // x_right x E_left
+    // // Interval Y4 = (x0 + x_delta) * alpha_2; // x_right x E_right
+
+    // // IVector W1{x0 - x_delta, 0, Y1, Y1, Y1, E_left};
+    // // IVector W2{x0 - x_delta, 0, Y2, Y2, Y2, E_right};
+    // // IVector W3{x0 + x_delta, 0, Y3, Y3, Y3, E_left};
+    // // IVector W4{x0 + x_delta, 0, Y4, Y4, Y4, E_right};
+
+    // // cout << quick_eval(W1,T_total) << endl;
+    // // cout << quick_eval(W2,T_total) << endl;
+    // // cout << quick_eval(W3,T_total) << endl;
+    // // cout << quick_eval(W4,T_total) << endl;
+    
 }
